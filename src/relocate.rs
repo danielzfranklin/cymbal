@@ -1,4 +1,5 @@
 use super::*;
+use eyre::eyre;
 
 pub struct RelocatedDwarf(Vec<RelocatedDwarfEntry>);
 
@@ -37,7 +38,7 @@ impl std::fmt::Debug for RelocatedDwarfEntry {
 }
 
 impl RelocatedDwarfEntry {
-    fn from_file_and_offset(address: (u64, u64), file: &Path, offset: u64) -> CrabResult<Self> {
+    fn from_file_and_offset(address: (u64, u64), file: &Path, offset: u64) -> eyre::Result<Self> {
         match Dwarf::new(file) {
             Ok(dwarf) => {
                 let (file_range, stated_address) = dwarf
@@ -56,7 +57,7 @@ impl RelocatedDwarfEntry {
                         })
                     })
                     .ok_or_else(|| {
-                        format!(
+                        eyre!(
                             "Couldn't find segment for `{}`+0x{:x}",
                             file.display(),
                             offset
@@ -75,7 +76,7 @@ impl RelocatedDwarfEntry {
 }
 
 impl RelocatedDwarf {
-    pub fn from_maps(maps: &[crate::MemoryMap]) -> CrabResult<Self> {
+    pub fn from_maps(maps: &[crate::MemoryMap]) -> eyre::Result<Self> {
         let vec: Result<Vec<_>, _> = maps
             .iter()
             .filter_map(|map| {
@@ -142,7 +143,7 @@ impl RelocatedDwarf {
         None
     }
 
-    pub fn get_var_address(&self, name: &str) -> CrabResult<Option<usize>> {
+    pub fn get_var_address(&self, name: &str) -> eyre::Result<Option<usize>> {
         for entry in &self.0 {
             if let Some(addr) = entry.dwarf.get_var_address(name)? {
                 if addr as u64 + entry.bias >= entry.address_range.0 + entry.address_range.1 {
@@ -154,7 +155,7 @@ impl RelocatedDwarf {
         Ok(None)
     }
 
-    pub fn source_location(&self, addr: usize) -> CrabResult<Option<(String, u64, u64)>> {
+    pub fn source_location(&self, addr: usize) -> eyre::Result<Option<(String, u64, u64)>> {
         for entry in &self.0 {
             if (addr as u64) < entry.address_range.0
                 || addr as u64 >= entry.address_range.0 + entry.address_range.1
@@ -168,7 +169,7 @@ impl RelocatedDwarf {
         Ok(None)
     }
 
-    pub fn source_snippet(&self, addr: usize) -> CrabResult<Option<String>> {
+    pub fn source_snippet(&self, addr: usize) -> eyre::Result<Option<String>> {
         for entry in &self.0 {
             if (addr as u64) < entry.address_range.0
                 || addr as u64 >= entry.address_range.0 + entry.address_range.1
@@ -182,11 +183,11 @@ impl RelocatedDwarf {
         Ok(None)
     }
 
-    pub fn with_addr_frames<T, F: for<'a> FnOnce(usize, FrameIter<'a>) -> CrabResult<T>>(
+    pub fn with_addr_frames<T, F: for<'a> FnOnce(usize, FrameIter<'a>) -> eyre::Result<T>>(
         &self,
         addr: usize,
         f: F,
-    ) -> CrabResult<Option<T>> {
+    ) -> eyre::Result<Option<T>> {
         for entry in &self.0 {
             if (addr as u64) < entry.address_range.0 || addr as u64 >= entry.address_range.1 {
                 continue;

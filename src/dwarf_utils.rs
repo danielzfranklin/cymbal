@@ -1,7 +1,6 @@
 use gimli::{DebuggingInformationEntry, Dwarf, Unit, UnitOffset, ValueType};
 
 use super::Reader;
-use crate::CrabResult;
 
 macro_rules! dwarf_attr {
     (str($dwarf:ident,$unit:ident) $entry:ident.$name:ident || $missing:ident) => {
@@ -18,12 +17,11 @@ macro_rules! dwarf_attr {
                     dwarf_attr_exists_action_action!($missing, unit_ref)
                 }
                 val => {
-                    return Err(format!(
+                    return Err(eyre::eyre!(
                         "`{:?}` is not a valid value for a {} attribute",
                         val,
                         gimli::$name,
-                    )
-                    .into())
+                    ))
                 }
             }
         } else {
@@ -35,7 +33,7 @@ macro_rules! dwarf_attr {
             dwarf_attr_exists_action_action!(
                 $missing,
                 attr.udata_value()
-                    .ok_or(concat!("invalid value for", stringify!($name)))?
+                    .ok_or(eyre::eyre!("invalid value for {}", stringify!($name)))?
             )
         } else {
             dwarf_attr_missing_action!($missing, $name)
@@ -48,9 +46,11 @@ macro_rules! dwarf_attr {
                     dwarf_attr_exists_action_action!($missing, encoding)
                 }
                 encoding => {
-                    return Err(
-                        format!("invalid value for {}: {:?}", gimli::$name, encoding).into(),
-                    )
+                    return Err(eyre::eyre!(
+                        "invalid value for {}: {:?}",
+                        gimli::$name,
+                        encoding
+                    ))
                 }
             }
         } else {
@@ -83,7 +83,7 @@ macro_rules! dwarf_attr_missing_action {
         continue;
     };
     (error, $name:ident) => {
-        return Err(concat!("missing ", stringify!($name), " attribute").into());
+        return Err(eyre::eyre!("missing {} attribute", stringify!($name)));
     };
     (None, $name:ident) => {
         None
@@ -176,12 +176,12 @@ pub trait EvalContext {
 fn value_type_from_base_type(
     unit: &Unit<Reader<'_>>,
     base_type: UnitOffset,
-) -> CrabResult<ValueType> {
+) -> eyre::Result<ValueType> {
     if base_type.0 == 0 {
         Ok(ValueType::Generic)
     } else {
         let base_type_die = unit.entry(base_type)?;
-        Ok(ValueType::from_entry(&base_type_die)?.ok_or_else(|| "not a base type".to_owned())?)
+        Ok(ValueType::from_entry(&base_type_die)?.ok_or_else(|| eyre::eyre!("not a base type"))?)
     }
 }
 
@@ -189,7 +189,7 @@ pub fn evaluate_expression<'a>(
     unit: &gimli::Unit<Reader<'a>>,
     expr: gimli::Expression<Reader<'a>>,
     eval_ctx: &impl EvalContext,
-) -> CrabResult<Vec<gimli::Piece<Reader<'a>>>> {
+) -> eyre::Result<Vec<gimli::Piece<Reader<'a>>>> {
     let mut eval = expr.evaluation(unit.encoding());
     let mut res = eval.evaluate()?;
     loop {

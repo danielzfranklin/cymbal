@@ -1,6 +1,8 @@
 use std::convert::TryFrom;
 use std::fmt;
 
+use eyre::eyre;
+
 use super::dwarf_utils::SearchAction;
 use super::*;
 
@@ -59,16 +61,16 @@ impl<'a> Frame<'a> {
 
     pub fn each_argument<
         C: super::dwarf_utils::EvalContext,
-        F: Fn(Local<'_, 'a>) -> CrabResult<()>,
+        F: Fn(Local<'_, 'a>) -> eyre::Result<()>,
     >(
         &self,
         eval_ctx: &C,
         addr: u64,
         f: F,
-    ) -> CrabResult<()> {
+    ) -> eyre::Result<()> {
         let (dwarf, unit, dw_die_offset) = self
             .function_debuginfo()
-            .ok_or_else(|| "No dwarf debuginfo for function".to_owned())?;
+            .ok_or_else(|| eyre!("No dwarf debuginfo for function"))?;
 
         dwarf_utils::search_tree(unit, Some(dw_die_offset), |entry, _indent| {
             if entry.offset() == dw_die_offset {
@@ -86,16 +88,16 @@ impl<'a> Frame<'a> {
 
     pub fn each_local<
         C: super::dwarf_utils::EvalContext,
-        F: Fn(Local<'_, 'a>) -> CrabResult<()>,
+        F: Fn(Local<'_, 'a>) -> eyre::Result<()>,
     >(
         &self,
         eval_ctx: &C,
         addr: u64,
         f: F,
-    ) -> CrabResult<()> {
+    ) -> eyre::Result<()> {
         let (dwarf, unit, dw_die_offset) = self
             .function_debuginfo()
-            .ok_or_else(|| "No dwarf debuginfo for function".to_owned())?;
+            .ok_or_else(|| eyre!("No dwarf debuginfo for function"))?;
         dwarf_utils::search_tree(unit, Some(dw_die_offset), |entry, _indent| {
             if entry.tag() == gimli::DW_TAG_inlined_subroutine && entry.offset() != dw_die_offset {
                 return Ok(SearchAction::SkipChildren); // Already visited by addr2line frame iter
@@ -154,7 +156,7 @@ impl<'ctx> LocalValue<'ctx> {
         &self,
         ty: &gimli::DebuggingInformationEntry<'_, '_, Reader<'ctx>>,
         eval_ctx: &impl super::dwarf_utils::EvalContext,
-    ) -> CrabResult<Option<PrimitiveValue>> {
+    ) -> eyre::Result<Option<PrimitiveValue>> {
         match ty.tag() {
             gimli::DW_TAG_base_type => {
                 let size = dwarf_attr!(udata ty.DW_AT_byte_size || error);
@@ -162,21 +164,19 @@ impl<'ctx> LocalValue<'ctx> {
                 match encoding {
                     gimli::DW_ATE_unsigned | gimli::DW_ATE_signed => {
                         let size = u8::try_from(size).map_err(|_| {
-                            format!("`{}` is too big for DW_ATE_unsigned or DW_ATE_signed", size,)
+                            eyre!("`{}` is too big for DW_ATE_unsigned or DW_ATE_signed", size)
                         })?;
                         let data = match self {
                             LocalValue::Pieces(pieces) => {
                                 if pieces.len() != 1 {
-                                    return Err("too many pieces for an integer value".into());
+                                    return Err(eyre!("too many pieces for an integer value"));
                                 }
 
                                 if pieces[0].size_in_bits.is_none()
                                     || pieces[0].size_in_bits.unwrap() == u64::from(size) * 8
                                 {
                                 } else {
-                                    return Err(
-                                        format!("wrong size for piece {:?}", pieces[0]).into()
-                                    );
+                                    return Err(eyre!("wrong size for piece {:?}", pieces[0]));
                                 }
                                 // FIXME handle this
                                 assert!(
@@ -187,7 +187,7 @@ impl<'ctx> LocalValue<'ctx> {
 
                                 let value = match &pieces[0].location {
                                     gimli::Location::Empty => {
-                                        return Err("found empty piece for an integer value".into())
+                                        return Err(eyre!("found empty piece for an integer value"))
                                     }
                                     gimli::Location::Register { register } => {
                                         eval_ctx.register(
@@ -207,9 +207,9 @@ impl<'ctx> LocalValue<'ctx> {
                                         value: _,
                                         byte_offset: _,
                                     } => {
-                                        return Err(
-                                            "found implicit pointer for an integer value".into()
-                                        )
+                                        return Err(eyre!(
+                                            "found implicit pointer for an integer value"
+                                        ))
                                     }
                                 };
                                 match value {
@@ -223,7 +223,7 @@ impl<'ctx> LocalValue<'ctx> {
                                     gimli::Value::I64(data) => data as u64,
                                     gimli::Value::U64(data) => data,
                                     gimli::Value::F32(_) | gimli::Value::F64(_) => {
-                                        return Err("found float piece for an integer value".into())
+                                        return Err(eyre!("found float piece for an integer value"))
                                     }
                                 }
                             }
@@ -258,7 +258,7 @@ impl<'a, 'ctx> Local<'a, 'ctx> {
         entry: gimli::DebuggingInformationEntry<'a, 'a, Reader<'ctx>>,
         eval_ctx: &C,
         addr: u64,
-    ) -> CrabResult<Self> {
+    ) -> eyre::Result<Self> {
         let origin_entry = if let Some(origin) = entry.attr(gimli::DW_AT_abstract_origin)? {
             let origin = match origin.value() {
                 gimli::AttributeValue::UnitRef(offset) => offset,

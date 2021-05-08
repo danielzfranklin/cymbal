@@ -28,8 +28,6 @@ pub use frame::{Frame, FrameIter, Local, LocalValue, PrimitiveValue};
 pub use relocate::RelocatedDwarf;
 pub use source::{DisassemblySource, Snippet};
 
-pub type CrabResult<T> = Result<T, Box<dyn std::error::Error + Send + Sync + Sync>>;
-
 mod rc_cow {
     use std::rc::Rc;
 
@@ -83,7 +81,7 @@ pub struct ParsedDwarf<'a> {
 }
 
 impl<'a> ParsedDwarf<'a> {
-    pub fn new(bytes: &'a [u8]) -> CrabResult<ParsedDwarf<'a>> {
+    pub fn new(bytes: &'a [u8]) -> eyre::Result<ParsedDwarf<'a>> {
         // This is completely inefficient and hackish code, but currently it serves the only
         // purpose of getting addresses of static variables.
         // TODO: this will be reworked in a more complete symbolication framework.
@@ -216,7 +214,7 @@ impl<'a> ParsedDwarf<'a> {
         */
     }
 
-    pub fn get_var_address(&self, name: &str) -> CrabResult<Option<usize>> {
+    pub fn get_var_address(&self, name: &str) -> eyre::Result<Option<usize>> {
         if let Some((unit_header, expr)) = self.vars.get(name) {
             let unit = self.addr2line.dwarf().unit(unit_header.clone())?;
             let mut eval = expr.clone().evaluation(unit.encoding());
@@ -230,7 +228,7 @@ impl<'a> ParsedDwarf<'a> {
         Ok(None)
     }
 
-    pub fn get_addr_frames(&'a self, addr: usize) -> CrabResult<FrameIter<'a>> {
+    pub fn get_addr_frames(&'a self, addr: usize) -> eyre::Result<FrameIter<'a>> {
         Ok(FrameIter {
             dwarf: self.addr2line.dwarf(),
             unit: self.addr2line.find_dwarf_unit(addr as u64),
@@ -263,7 +261,7 @@ mod inner {
         // todo: impl loader struct instead of taking 'path' as an argument.
         // It will be required to e.g. load coredumps, or external debug info, or to
         // communicate with rustc/lang servers.
-        pub fn new<P: AsRef<std::path::Path>>(path: P) -> CrabResult<Dwarf> {
+        pub fn new<P: AsRef<std::path::Path>>(path: P) -> eyre::Result<Dwarf> {
             // Load ELF/Mach-O object file
             let file = File::open(path)?;
 
@@ -332,15 +330,15 @@ impl Dwarf {
         self.rent(|parsed| Some(parsed.get_address_symbol(addr)?.kind()))
     }
 
-    pub fn get_var_address(&self, name: &str) -> CrabResult<Option<usize>> {
+    pub fn get_var_address(&self, name: &str) -> eyre::Result<Option<usize>> {
         self.rent(|parsed| parsed.get_var_address(name))
     }
 
-    pub fn with_addr_frames<T, F: for<'a> FnOnce(usize, FrameIter<'a>) -> CrabResult<T>>(
+    pub fn with_addr_frames<T, F: for<'a> FnOnce(usize, FrameIter<'a>) -> eyre::Result<T>>(
         &self,
         addr: usize,
         f: F,
-    ) -> CrabResult<T> {
+    ) -> eyre::Result<T> {
         self.rent(|parsed| f(addr, parsed.get_addr_frames(addr)?))
     }
 }
