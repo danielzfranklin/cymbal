@@ -13,6 +13,7 @@ use object::{
 use std::{
     borrow::Cow,
     collections::{BTreeMap, HashMap},
+    fmt,
     fs::File,
     path::Path,
 };
@@ -235,6 +236,17 @@ impl<'a> ParsedDwarf<'a> {
             unit: self.addr2line.find_dwarf_unit(addr as u64),
             iter: self.addr2line.find_frames(addr as u64)?,
         })
+    }
+}
+
+impl fmt::Debug for ParsedDwarf<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut symbols = self.symbol_names.keys().collect::<Vec<_>>();
+        symbols.sort();
+        f.debug_struct("ParsedDwarf")
+            .field("vars", &self.vars.keys())
+            .field("symbol_names", &symbols)
+            .finish()
     }
 }
 

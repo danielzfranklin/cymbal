@@ -15,3 +15,8 @@ addr2line = "0.13.0"
 object = "0.20.0"
 capstone = "0.7.0"
 memmap = "0.7.0"
+eyre = "0.6.5"
+
+[dev-dependencies]
+duct = "0.13.5"
+insta = "1.7.1"
