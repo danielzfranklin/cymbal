@@ -27,8 +27,8 @@ impl<'data> From<object::Symbol<'data>> for Symbol<'data> {
             .name()
             .map(|name| demangle_auto(Cow::Borrowed(name), None).to_string());
         Symbol {
-            symbol,
             demangled_name,
+            symbol,
         }
     }
 }

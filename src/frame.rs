@@ -103,10 +103,10 @@ impl<'a> Frame<'a> {
                 return Ok(SearchAction::SkipChildren); // Already visited by addr2line frame iter
             }
 
-            if entry.tag() == gimli::DW_TAG_lexical_block {
-                if !super::dwarf_utils::in_range(dwarf, &unit, Some(&entry), addr)? {
-                    return Ok(SearchAction::SkipChildren);
-                }
+            if entry.tag() == gimli::DW_TAG_lexical_block
+                && !super::dwarf_utils::in_range(dwarf, &unit, Some(&entry), addr)?
+            {
+                return Ok(SearchAction::SkipChildren);
             }
 
             if entry.tag() == gimli::DW_TAG_variable {
@@ -329,6 +329,7 @@ pub struct FrameIter<'a> {
 }
 
 impl<'a> FrameIter<'a> {
+    #[allow(clippy::should_implement_trait)]
     pub fn next(&mut self) -> Result<Option<Frame<'a>>, gimli::Error> {
         Ok(self.iter.next()?.map(|frame| Frame {
             dwarf: self.dwarf,
