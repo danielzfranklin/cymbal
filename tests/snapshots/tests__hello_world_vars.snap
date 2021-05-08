@@ -1,0 +1,10 @@
+---
+source: tests/tests.rs
+expression: vars(&dwarf)
+
+---
+[
+    "main",
+    "result",
+    "vtable",
+]

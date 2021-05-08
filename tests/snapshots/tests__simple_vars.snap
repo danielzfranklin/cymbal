@@ -1,0 +1,43 @@
+---
+source: tests/tests.rs
+expression: vars(&dwarf)
+
+---
+[
+    "a",
+    "align",
+    "alloc_size",
+    "b",
+    "cap",
+    "count",
+    "e",
+    "end",
+    "err",
+    "kind",
+    "layout",
+    "left_val",
+    "len",
+    "len_rounded_up",
+    "main",
+    "memory",
+    "new_layout",
+    "new_ptr",
+    "new_size",
+    "offset",
+    "old_layout",
+    "old_size",
+    "pad",
+    "padded_size",
+    "post",
+    "ptr",
+    "raw_ptr",
+    "required_cap",
+    "result",
+    "right_val",
+    "size",
+    "slice",
+    "t",
+    "v",
+    "val",
+    "vtable",
+]

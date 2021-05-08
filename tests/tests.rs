@@ -4,7 +4,7 @@ use duct::cmd;
 use insta::assert_debug_snapshot;
 use memmap::Mmap;
 
-use cymbal::ParsedDwarf;
+use cymbal::{Function, ParsedDwarf};
 
 fn build_sample(ws_name: &str) -> eyre::Result<()> {
     let ws = PathBuf::from("tests/samples").join(ws_name);
@@ -48,16 +48,44 @@ fn simple_bin() -> eyre::Result<Mmap> {
     bin("simple", "blog")
 }
 
+fn functions<'a>(dwarf: &'a ParsedDwarf) -> Vec<&'a Function> {
+    let mut functions = dwarf.functions().iter().collect::<Vec<_>>();
+    functions.sort();
+    functions
+}
+
+fn vars<'a>(dwarf: &'a ParsedDwarf) -> Vec<&'a str> {
+    let mut vars = dwarf.var_names().collect::<Vec<_>>();
+    vars.sort_unstable();
+    vars
+}
+
+fn symbols<'a>(dwarf: &'a ParsedDwarf) -> Vec<&'a str> {
+    let mut symbols = dwarf
+        .symbols()
+        .iter()
+        .filter_map(|s| s.demangled_name())
+        .collect::<Vec<_>>();
+    symbols.sort_unstable();
+    symbols
+}
+
 #[test]
 fn parse_dwarf_hello_world() -> eyre::Result<()> {
     let data = hello_world_bin()?;
-    assert_debug_snapshot!(ParsedDwarf::new(&*data).unwrap());
+    let dwarf = ParsedDwarf::new(&*data)?;
+    assert_debug_snapshot!("hello_world_symbols", symbols(&dwarf));
+    assert_debug_snapshot!("hello_world_vars", vars(&dwarf));
+    assert_debug_snapshot!("hello_world_functions", functions(&dwarf));
     Ok(())
 }
 
 #[test]
 fn parse_dwarf_simple() -> eyre::Result<()> {
     let data = simple_bin()?;
-    assert_debug_snapshot!(ParsedDwarf::new(&*data)?);
+    let dwarf = ParsedDwarf::new(&*data)?;
+    assert_debug_snapshot!("simple_symbols", symbols(&dwarf));
+    assert_debug_snapshot!("simple_vars", vars(&dwarf));
+    assert_debug_snapshot!("simple_functions", functions(&dwarf));
     Ok(())
 }

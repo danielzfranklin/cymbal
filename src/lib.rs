@@ -13,18 +13,19 @@ use object::{
 use std::{
     borrow::Cow,
     collections::{BTreeMap, HashMap},
-    fmt,
     fs::File,
     path::Path,
 };
 pub use sym::Symbol;
 
 mod frame;
+mod function;
 mod relocate;
 mod source;
 mod sym;
 
 pub use frame::{Frame, FrameIter, Local, LocalValue, PrimitiveValue};
+pub use function::Function;
 pub use relocate::RelocatedDwarf;
 pub use source::{DisassemblySource, Snippet};
 
@@ -76,6 +77,7 @@ pub struct ParsedDwarf<'a> {
             gimli::Expression<Reader<'a>>,
         ),
     >,
+    functions: Vec<Function>,
     symbols: Vec<Symbol<'a>>,
     symbol_names: HashMap<String, usize>,
 }
@@ -122,19 +124,36 @@ impl<'a> ParsedDwarf<'a> {
         let mut units = dwarf.units();
 
         let mut vars = BTreeMap::new();
+        let mut functions = Vec::new();
+
         while let Some(header) = units.next()? {
             let unit = dwarf.unit(header.clone())?;
             let mut entries = unit.entries();
             while let Some((_, entry)) = entries.next_dfs()? {
-                if entry.tag() == gimli::DW_TAG_variable {
-                    let name = dwarf_attr!(str(dwarf, unit) entry.DW_AT_name || continue)
-                        .to_string()?
-                        .into_owned();
-                    if let Some(expr) =
-                        dwarf_attr!(entry.DW_AT_location || continue).exprloc_value()
-                    {
-                        vars.insert(name, (header.clone(), expr));
+                let name = dwarf_attr!(str(dwarf, unit) entry.DW_AT_name || continue)
+                    .to_string()?
+                    .into_owned();
+
+                match entry.tag() {
+                    gimli::DW_TAG_variable => {
+                        if let Some(expr) =
+                            dwarf_attr!(entry.DW_AT_location || continue).exprloc_value()
+                        {
+                            vars.insert(name, (header.clone(), expr));
+                        }
                     }
+                    gimli::DW_TAG_subprogram => {
+                        let link_name =
+                            dwarf_attr!(str(dwarf, unit) entry.DW_AT_linkage_name || continue)
+                                .to_string()?
+                                .to_string();
+
+                        let low_pc = dwarf_attr!(addr entry.DW_AT_low_pc || continue);
+
+                        let func = Function::new(link_name, low_pc);
+                        functions.push(func);
+                    }
+                    _ => (),
                 }
             }
         }
@@ -172,9 +191,22 @@ impl<'a> ParsedDwarf<'a> {
             object,
             addr2line,
             vars,
+            functions,
             symbols,
             symbol_names,
         })
+    }
+
+    pub fn var_names(&self) -> impl Iterator<Item = &str> {
+        self.vars.keys().map(|s| s.as_str())
+    }
+
+    pub fn symbols(&self) -> &[Symbol] {
+        &self.symbols
+    }
+
+    pub fn functions(&self) -> &[Function] {
+        &self.functions
     }
 
     pub fn get_symbol_address(&self, name: &str) -> Option<usize> {
@@ -234,17 +266,6 @@ impl<'a> ParsedDwarf<'a> {
             unit: self.addr2line.find_dwarf_unit(addr as u64),
             iter: self.addr2line.find_frames(addr as u64)?,
         })
-    }
-}
-
-impl fmt::Debug for ParsedDwarf<'_> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut symbols = self.symbol_names.keys().collect::<Vec<_>>();
-        symbols.sort();
-        f.debug_struct("ParsedDwarf")
-            .field("vars", &self.vars.keys())
-            .field("symbol_names", &symbols)
-            .finish()
     }
 }
 

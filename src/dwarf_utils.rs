@@ -28,6 +28,24 @@ macro_rules! dwarf_attr {
             dwarf_attr_missing_action!($missing, $name)
         }
     };
+    (addr $entry:ident.$name:ident || $missing:ident) => {
+        if let Some(attr) = $entry.attr(gimli::$name)? {
+            match attr.value() {
+                gimli::AttributeValue::Addr(addr) => {
+                    dwarf_attr_exists_action_action!($missing, addr)
+                }
+                val => {
+                    return Err(eyre::eyre!(
+                        "`{:?}` is not a valid value for a {} attribute",
+                        val,
+                        gimli::$name,
+                    ))
+                }
+            }
+        } else {
+            dwarf_attr_missing_action!($missing, $name)
+        }
+    };
     (udata $entry:ident.$name:ident || $missing:ident) => {
         if let Some(attr) = $entry.attr(gimli::$name)? {
             dwarf_attr_exists_action_action!(
